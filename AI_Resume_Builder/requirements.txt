@@ -1,0 +1,5 @@
+streamlit==1.40.0
+openai==1.51.0
+python-dotenv==1.0.1
+certifi>=2025.10.5
+
