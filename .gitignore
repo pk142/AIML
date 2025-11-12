@@ -1,0 +1,19 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Data and logs
+data/
+*.pdf
+*.log
+
+# VS Code and env files
+.vscode/
+.env
+
+# LangChain / Chroma local db
+chroma/
