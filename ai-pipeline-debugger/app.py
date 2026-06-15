@@ -93,7 +93,7 @@ if uploaded_file:
             """
 
             response = ollama.chat(
-                model="phi3",
+                model="gemma:2b",
                 messages=[
                     {
                         "role": "user",

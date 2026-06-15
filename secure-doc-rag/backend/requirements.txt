@@ -1,0 +1,21 @@
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+pydantic==2.7.1
+pydantic-settings==2.3.1
+
+# Document processing
+pymupdf==1.24.5          # PDF: fast, accurate, page-aware
+python-docx==1.1.2       # DOCX parsing
+chardet==5.2.0           # TXT encoding detection
+
+# Vector DB
+qdrant-client==1.9.1
+
+# HTTP client for Ollama
+httpx==0.27.0
+aiohttp==3.9.5
+
+# Text utilities
+tiktoken==0.7.0          # token-aware chunking
+python-magic==0.4.27     # file type validation
