@@ -1,3 +1,15 @@
+# How to run the demo
+# Backend--
+PS D:\Practice_Work\AIML\secure-doc-rag> .\venv\Scripts\Activate.ps1                               
+(venv) PS D:\Practice_Work\AIML\secure-doc-rag> cd backend                                                    
+(venv) PS D:\Practice_Work\AIML\secure-doc-rag\backend> python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+------------------------------------------------------------------------------------------------------------------
+# --Frontend--
+PS D:\Practice_Work\AIML\secure-doc-rag> & d:/Practice_Work/AIML/secure-doc-rag/.venv/Scripts/Activate.ps1
+(.venv) PS D:\Practice_Work\AIML\secure-doc-rag> $env:BACKEND_URL = "http://localhost:8001"                       
+(.venv) PS D:\Practice_Work\AIML\secure-doc-rag> python -m streamlit run frontend/app.py --server.port 8502   
+
+
 # 🔒 Secure Document Intelligence & RAG
 
 **100% local — no OpenAI, no Gemini, no Claude API, no data egress.**

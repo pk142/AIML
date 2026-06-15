@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # ── Prompts ────────────────────────────────────────────────────────────────
 
 QA_SYSTEM = (
-     "You are a precise document analyst. "
+    "You are a precise document analyst. "
     "Answer the user's question using ONLY the provided context excerpts. "
     "Be direct and concise. Start with the answer immediately. "
     "Always mention the page number at the end like: (Source: Page X). "
