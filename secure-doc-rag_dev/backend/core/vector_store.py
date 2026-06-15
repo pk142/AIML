@@ -83,14 +83,14 @@ def search(
         query_filter = qmodels.Filter(
             must=[qmodels.FieldCondition(key="doc_id", match=qmodels.MatchValue(value=doc_id))]
         )
-    results = client.search(
+    results = client.query_points(
         collection_name=settings.collection_name,
-        query_vector=query_vector,
+        query=query_vector,
         query_filter=query_filter,
         limit=top_k,
         with_payload=True,
     )
-    return [{**r.payload, "score": round(r.score, 4)} for r in results]
+    return [{**r.payload, "score": round(r.score, 4)} for r in results.points]
 
 
 def delete_document(client: QdrantClient, doc_id: str) -> None:
