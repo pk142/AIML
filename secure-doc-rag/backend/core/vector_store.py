@@ -12,12 +12,20 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
 from core.config import settings
-
+# Singleton in-memory client (dev mode only)
+_in_memory_client: QdrantClient | None = None
 logger = logging.getLogger(__name__)
 
 
 def get_client() -> QdrantClient:
-    return QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
+    global _in_memory_client
+    if settings.qdrant_in_memory:
+        if _in_memory_client is None:
+            _in_memory_client = QdrantClient(":memory:")
+            logger.info("Using in-memory Qdrant")
+        return _in_memory_client
+    else:
+        return QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
 
 
 def ensure_collection(client: QdrantClient) -> None:
@@ -85,9 +93,9 @@ def search(
             ]
         )
 
-    results = client.search(
+    results = client.query_points(
         collection_name=settings.collection_name,
-        query_vector=query_vector,
+        query=query_vector,
         query_filter=query_filter,
         limit=top_k,
         with_payload=True,
@@ -95,7 +103,7 @@ def search(
 
     return [
         {**r.payload, "score": round(r.score, 4)}
-        for r in results
+        for r in results.points
     ]
 
 

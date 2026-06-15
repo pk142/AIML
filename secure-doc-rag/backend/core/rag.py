@@ -16,11 +16,13 @@ logger = logging.getLogger(__name__)
 # ── Prompts ────────────────────────────────────────────────────────────────
 
 QA_SYSTEM = (
-    "You are a precise document analyst. "
+     "You are a precise document analyst. "
     "Answer the user's question using ONLY the provided context excerpts. "
-    "If the answer is not in the context, say: "
-    "'I could not find this information in the uploaded document.' "
-    "Always cite which page number(s) your answer comes from."
+    "Be direct and concise. Start with the answer immediately. "
+    "Always mention the page number at the end like: (Source: Page X). "
+    "If the answer is not in the context, say exactly: "
+    "'This information is not found in the uploaded document.' "
+    "Do NOT make up information."
 )
 
 SUMMARY_SYSTEM = (

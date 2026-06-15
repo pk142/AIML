@@ -1,127 +1,206 @@
 """
-Secure Document Intelligence — Streamlit Frontend
-All requests go to the local FastAPI backend. No external API calls.
+Secure Document Intelligence — Streamlit Frontend (Improved UI)
 """
 import os
+import time
 import requests
 import streamlit as st
 
-# ── Config ─────────────────────────────────────────────────────────────────
-
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BACKEND_URL}/api/v1"
-TIMEOUT = 180  # seconds (LLM can be slow on CPU)
-
-# ── Page setup ─────────────────────────────────────────────────────────────
+TIMEOUT = 180
 
 st.set_page_config(
-    page_title="Secure Document Intelligence",
+    page_title="Secure Doc Intel",
     page_icon="🔒",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* Sidebar */
-    [data-testid="stSidebar"] { background: #0f1117; }
-    [data-testid="stSidebar"] * { color: #e0e0e0 !important; }
+    /* ── Base ── */
+    [data-testid="stSidebar"] { background: #0d0f18; border-right: 1px solid #1e2235; }
+    .main { background: #0a0c14; }
+    * { font-family: 'Inter', sans-serif; }
 
-    /* Cards */
-    .card {
-        background: #1e2130;
-        border: 1px solid #2d3250;
-        border-radius: 10px;
-        padding: 1.2rem 1.4rem;
-        margin-bottom: 1rem;
-    }
+    /* ── Sidebar text ── */
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .stMarkdown { color: #9aa3b8 !important; }
 
-    /* Source badge */
-    .source-badge {
-        display: inline-block;
-        background: #2d3250;
-        color: #7eb3ff;
-        font-size: 0.78rem;
-        padding: 2px 10px;
-        border-radius: 20px;
-        margin: 2px 4px 2px 0;
-    }
-
-    /* Answer box */
-    .answer-box {
-        background: #13151f;
-        border-left: 4px solid #4a90d9;
-        border-radius: 6px;
-        padding: 1rem 1.2rem;
-        font-size: 1rem;
-        line-height: 1.7;
-    }
-
-    /* Security notice */
-    .security-badge {
-        background: #0d2a1e;
+    /* ── Security badge ── */
+    .sec-badge {
+        background: linear-gradient(135deg, #0d2518, #0d1f2d);
         border: 1px solid #1a5c3a;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 0.78rem;
         color: #4caf7d;
-        border-radius: 6px;
-        padding: 0.5rem 0.8rem;
-        font-size: 0.82rem;
-        margin-bottom: 1rem;
+        margin-bottom: 16px;
+        letter-spacing: 0.3px;
     }
 
-    /* Score bar */
-    .score-bar {
-        height: 4px;
-        border-radius: 2px;
-        background: linear-gradient(90deg, #4a90d9, #6dd5a0);
-        margin-top: 4px;
+    /* ── Doc card in sidebar ── */
+    .doc-card {
+        background: #13172a;
+        border: 1px solid #1e2748;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+    .doc-card:hover { border-color: #3d5afe; }
+    .doc-card.active { border-color: #3d5afe; background: #161c38; }
+    .doc-card-name { font-size: 0.85rem; color: #c8d0e8; font-weight: 500; }
+    .doc-card-meta { font-size: 0.72rem; color: #5a6480; margin-top: 2px; }
+
+    /* ── Answer box ── */
+    .answer-wrap {
+        background: #0f1322;
+        border: 1px solid #1e2748;
+        border-left: 4px solid #3d5afe;
+        border-radius: 10px;
+        padding: 18px 20px;
+        font-size: 0.97rem;
+        line-height: 1.75;
+        color: #dde3f5;
+        margin: 8px 0 16px 0;
     }
 
-    h1, h2, h3 { color: #e8eaf6 !important; }
-    .stButton>button {
+    /* ── Source card ── */
+    .source-card {
+        background: #0d1020;
+        border: 1px solid #1a2040;
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin-bottom: 8px;
+    }
+    .source-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+    }
+    .source-label { font-size: 0.78rem; color: #7eb3ff; font-weight: 600; }
+    .source-score { font-size: 0.72rem; color: #4caf7d; }
+    .source-excerpt { font-size: 0.8rem; color: #6b7899; line-height: 1.5; }
+    .score-bar-bg { background: #1a2040; border-radius: 4px; height: 3px; margin-top: 8px; }
+    .score-bar-fill { height: 3px; border-radius: 4px;
+        background: linear-gradient(90deg, #3d5afe, #00bcd4); }
+
+    /* ── Upload drop zone ── */
+    .upload-hint {
+        text-align: center;
+        color: #3a4060;
+        font-size: 0.9rem;
+        padding: 40px 20px;
+        border: 2px dashed #1e2748;
+        border-radius: 12px;
+        margin-bottom: 16px;
+    }
+
+    /* ── Metric cards ── */
+    .metric-row { display: flex; gap: 12px; margin: 16px 0; }
+    .metric-card {
+        flex: 1;
+        background: #0d1020;
+        border: 1px solid #1a2040;
+        border-radius: 8px;
+        padding: 14px;
+        text-align: center;
+    }
+    .metric-val { font-size: 1.4rem; font-weight: 700; color: #7eb3ff; }
+    .metric-lbl { font-size: 0.72rem; color: #5a6480; margin-top: 2px; }
+
+    /* ── Status pill ── */
+    .pill-ok  { display:inline-block; background:#0d2518; color:#4caf7d;
+                border:1px solid #1a5c3a; border-radius:20px;
+                padding:2px 10px; font-size:0.75rem; }
+    .pill-err { display:inline-block; background:#2a0d0d; color:#ef5350;
+                border:1px solid #5c1a1a; border-radius:20px;
+                padding:2px 10px; font-size:0.75rem; }
+
+    /* ── Chat input ── */
+    [data-testid="stChatInput"] textarea {
+        background: #0d1020 !important;
+        border: 1px solid #1e2748 !important;
+        color: #dde3f5 !important;
+        border-radius: 10px !important;
+    }
+
+    /* ── Buttons ── */
+    .stButton > button {
+        background: #1e2748;
+        color: #9aa3c8;
+        border: 1px solid #2a3360;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+    .stButton > button:hover {
         background: #3d5afe;
         color: white;
-        border: none;
-        border-radius: 6px;
+        border-color: #3d5afe;
     }
-    .stButton>button:hover { background: #5472ff; }
+
+    /* ── Divider ── */
+    hr { border-color: #1a1f35 !important; }
+
+    /* ── Tab styling ── */
+    .stTabs [data-baseweb="tab"] { color: #5a6480; }
+    .stTabs [aria-selected="true"] { color: #7eb3ff !important; }
+
+    /* ── Toast-style success ── */
+    .toast-ok {
+        background: #0d2518; border: 1px solid #1a5c3a;
+        border-radius: 8px; padding: 12px 16px;
+        color: #4caf7d; font-size: 0.9rem; margin-bottom: 12px;
+    }
+    .toast-err {
+        background: #2a0d0d; border: 1px solid #5c1a1a;
+        border-radius: 8px; padding: 12px 16px;
+        color: #ef5350; font-size: 0.9rem; margin-bottom: 12px;
+    }
+
+    /* hide streamlit default header */
+    #MainMenu, footer, header { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def api_get(path: str):
+def api_get(path):
     try:
         r = requests.get(f"{API}{path}", timeout=TIMEOUT)
         r.raise_for_status()
         return r.json()
     except requests.exceptions.ConnectionError:
-        st.error("❌ Cannot connect to backend. Is the server running?")
+        st.error("❌ Backend not reachable. Is the server running?")
         return None
     except Exception as e:
         st.error(f"API error: {e}")
         return None
 
-
-def api_post(path: str, json_data=None, files=None):
+def api_post(path, json_data=None, files=None):
     try:
         r = requests.post(f"{API}{path}", json=json_data, files=files, timeout=TIMEOUT)
         r.raise_for_status()
         return r.json()
     except requests.exceptions.ConnectionError:
-        st.error("❌ Cannot connect to backend.")
+        st.error("❌ Backend not reachable.")
         return None
     except requests.HTTPError as e:
         detail = e.response.json().get("detail", str(e)) if e.response else str(e)
-        st.error(f"API error: {detail}")
+        st.error(f"Error: {detail}")
         return None
     except Exception as e:
         st.error(f"Unexpected error: {e}")
         return None
 
-
-def api_delete(path: str):
+def api_delete(path):
     try:
         r = requests.delete(f"{API}{path}", timeout=30)
         r.raise_for_status()
@@ -130,249 +209,343 @@ def api_delete(path: str):
         st.error(f"Delete error: {e}")
         return None
 
-
-def render_sources(sources: list):
+def render_sources(sources):
     if not sources:
         return
-    st.markdown("**📎 Sources:**")
+    st.markdown("**Referenced Sources**")
     for s in sources:
         score_pct = int(s.get("score", 0) * 100)
-        with st.expander(
-            f"📄 {s['source']}  ·  Page {s['page']}  ·  Relevance: {score_pct}%",
-            expanded=False,
-        ):
-            st.markdown(f"> {s['excerpt']}")
-            st.markdown(
-                f'<div class="score-bar" style="width:{score_pct}%"></div>',
-                unsafe_allow_html=True,
-            )
+        bar_width = min(score_pct, 100)
+        st.markdown(f"""
+        <div class="source-card">
+            <div class="source-header">
+                <span class="source-label">📄 {s['source']} · Page {s['page']}</span>
+                <span class="source-score">Relevance {score_pct}%</span>
+            </div>
+            <div class="source-excerpt">{s['excerpt']}</div>
+            <div class="score-bar-bg">
+                <div class="score-bar-fill" style="width:{bar_width}%"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+def refresh_docs():
+    data = api_get("/documents")
+    if data:
+        st.session_state.documents = data["documents"]
+
+# ── Session state ───────────────────────────────────────────────────────────
+for key, val in {
+    "selected_doc": None,
+    "chat_history": [],
+    "documents": [],
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 
-# ── Session state defaults ─────────────────────────────────────────────────
-
-if "selected_doc" not in st.session_state:
-    st.session_state.selected_doc = None
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "documents" not in st.session_state:
-    st.session_state.documents = []
-
-
-# ── Sidebar ────────────────────────────────────────────────────────────────
-
+# ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 🔒 Secure Doc Intel")
     st.markdown(
-        '<div class="security-badge">🛡️ 100% local · No cloud API · No data egress</div>',
-        unsafe_allow_html=True,
+        '<div class="sec-badge">🛡️ 100% local &nbsp;·&nbsp; No cloud API &nbsp;·&nbsp; No data egress</div>',
+        unsafe_allow_html=True
     )
 
-    # Health check
-    if st.button("⚡ Check System Health", use_container_width=True):
-        health = api_get("/health")
-        if health:
-            status_icon = "✅" if health["status"] == "ok" else "⚠️"
-            st.write(f"{status_icon} **Status:** {health['status']}")
-            st.write(f"🗄️ **Qdrant:** {health['qdrant']}")
-            st.write(f"🤖 **Ollama:** {health['ollama']}")
-            st.write(f"📦 **LLM:** `{health['llm_model']}`")
-            st.write(f"🔢 **Embed:** `{health['embed_model']}`")
+    # Health
+    if st.button("⚡ System Health", use_container_width=True):
+        h = api_get("/health")
+        if h:
+            ok = h["status"] == "ok"
+            st.markdown(
+                f'<span class="{"pill-ok" if ok else "pill-err"}">{"✅ All systems OK" if ok else "⚠️ Degraded"}</span>',
+                unsafe_allow_html=True
+            )
+            st.markdown(f"**Qdrant:** {h['qdrant']}")
+            st.markdown(f"**Ollama:** {h['ollama']}")
+            st.markdown(f"**Model:** `{h['llm_model']}`")
 
     st.divider()
 
-    # Document list
-    st.markdown("### 📁 Uploaded Documents")
-    if st.button("🔄 Refresh list", use_container_width=True):
-        data = api_get("/documents")
-        if data:
-            st.session_state.documents = data["documents"]
+    # Documents
+    st.markdown("**📁 Documents**")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Refresh", use_container_width=True):
+            refresh_docs()
+    with col2:
+        if st.button("➕ Upload", use_container_width=True):
+            st.session_state["go_upload"] = True
 
     docs = st.session_state.documents
     if not docs:
-        st.info("No documents yet. Upload one →")
-    else:
-        doc_options = {f"{d['filename']} ({d['chunks']} chunks)": d["doc_id"] for d in docs}
-        doc_options["🌐 All documents"] = None
-
-        selected_label = st.selectbox(
-            "Query scope:",
-            options=list(doc_options.keys()),
+        st.markdown(
+            '<div style="color:#3a4060;font-size:0.8rem;padding:12px 0;">No documents yet.</div>',
+            unsafe_allow_html=True
         )
-        st.session_state.selected_doc = doc_options[selected_label]
+    else:
+        # All docs option
+        all_selected = st.session_state.selected_doc is None
+        if st.button(
+            f"{'✅ ' if all_selected else ''}🌐 All documents",
+            use_container_width=True
+        ):
+            st.session_state.selected_doc = None
 
-        # Delete
+        for d in docs:
+            is_sel = st.session_state.selected_doc == d["doc_id"]
+            label = f"{'✅ ' if is_sel else '📄 '}{d['filename'][:28]}"
+            if st.button(label, use_container_width=True, key=f"doc_{d['doc_id']}"):
+                st.session_state.selected_doc = d["doc_id"]
+
+        # Delete selected
         if st.session_state.selected_doc:
-            if st.button("🗑️ Delete selected", use_container_width=True):
+            st.divider()
+            if st.button("🗑️ Delete selected doc", use_container_width=True):
                 res = api_delete(f"/documents/{st.session_state.selected_doc}")
                 if res:
-                    st.success(res["message"])
+                    st.success("Deleted.")
                     st.session_state.selected_doc = None
                     st.session_state.documents = []
                     st.rerun()
 
     st.divider()
-
-    # Clear chat
-    if st.button("🧹 Clear chat history", use_container_width=True):
+    if st.button("🧹 Clear chat", use_container_width=True):
         st.session_state.chat_history = []
         st.rerun()
 
 
-# ── Main content ───────────────────────────────────────────────────────────
+# ── Main ────────────────────────────────────────────────────────────────────
+st.markdown("# 🔒 Secure Document Intelligence")
+st.markdown(
+    '<p style="color:#5a6480;margin-top:-8px;margin-bottom:20px;">'
+    'Upload documents · Ask questions · Get cited answers — entirely offline</p>',
+    unsafe_allow_html=True
+)
 
-st.title("🔒 Secure Document Intelligence")
-st.caption("Upload documents · Ask questions · Get cited answers — entirely offline")
-
-tab_upload, tab_chat, tab_summary = st.tabs(["📤 Upload", "💬 Ask Questions", "📋 Summary"])
+tab_upload, tab_chat, tab_summary = st.tabs(["📤  Upload", "💬  Ask", "📋  Summary"])
 
 
-# ──────────────────── UPLOAD TAB ────────────────────────────────────────────
-
+# ── UPLOAD ──────────────────────────────────────────────────────────────────
 with tab_upload:
     st.markdown("### Upload a Document")
     st.markdown(
-        "Supported formats: **PDF**, **DOCX**, **TXT** · Max 50 MB · "
-        "All processing is local — documents never leave this server."
+        '<p style="color:#5a6480;font-size:0.88rem;">PDF, DOCX, or TXT · Max 50 MB · '
+        'All processing is local — nothing leaves this machine.</p>',
+        unsafe_allow_html=True
     )
 
-    uploaded_file = st.file_uploader(
-        "Choose a file",
+    uploaded = st.file_uploader(
+        "Drop your file here",
         type=["pdf", "docx", "doc", "txt"],
-        help="Your file is processed locally. No data is sent to any cloud service.",
+        label_visibility="collapsed"
     )
 
-    if uploaded_file:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.write(f"**File:** {uploaded_file.name}")
-            st.write(f"**Size:** {uploaded_file.size / 1024:.1f} KB")
-        with col2:
-            if st.button("🚀 Ingest Document", use_container_width=True):
-                with st.spinner("Extracting text, chunking, and building embeddings…"):
-                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-                    result = api_post("/upload", files=files)
+    if uploaded:
+        st.markdown(f"""
+        <div style="background:#0d1020;border:1px solid #1a2040;border-radius:8px;
+                    padding:14px 16px;margin-bottom:16px;">
+            <div style="color:#c8d0e8;font-size:0.9rem;">📄 <b>{uploaded.name}</b></div>
+            <div style="color:#5a6480;font-size:0.78rem;margin-top:4px;">
+                {uploaded.size / 1024:.1f} KB · {uploaded.type or 'unknown type'}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-                if result:
-                    st.success(f"✅ {result['message']}")
-                    col_a, col_b, col_c = st.columns(3)
-                    col_a.metric("Chunks stored", result["chunks_stored"])
-                    col_b.metric("Pages extracted", result["pages"])
-                    col_c.metric("Doc ID", result["doc_id"][:8] + "…")
+        if st.button("🚀 Ingest Document", type="primary"):
+            with st.spinner("Extracting · Chunking · Embedding…"):
+                files = {"file": (uploaded.name, uploaded.getvalue(), uploaded.type)}
+                result = api_post("/upload", files=files)
 
-                    # Refresh documents list
-                    data = api_get("/documents")
-                    if data:
-                        st.session_state.documents = data["documents"]
+            if result:
+                st.markdown(f"""
+                <div class="toast-ok">
+                    ✅ <b>{result['filename']}</b> ingested successfully
+                </div>
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-val">{result['chunks_stored']}</div>
+                        <div class="metric-lbl">Chunks stored</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">{result['pages']}</div>
+                        <div class="metric-lbl">Pages</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">{result['doc_id'][:6]}…</div>
+                        <div class="metric-lbl">Doc ID</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                refresh_docs()
+    else:
+        st.markdown("""
+        <div class="upload-hint">
+            📂 Drag and drop a file above<br>
+            <span style="font-size:0.8rem;color:#2a3360;">PDF · DOCX · TXT</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 
-# ──────────────────── CHAT TAB ───────────────────────────────────────────────
-
+# ── CHAT ────────────────────────────────────────────────────────────────────
 with tab_chat:
-    st.markdown("### Ask Questions About Your Documents")
-
-    # Scope indicator
+    # Scope bar
     if st.session_state.selected_doc:
         doc_meta = next(
-            (d for d in st.session_state.documents if d["doc_id"] == st.session_state.selected_doc),
-            None,
+            (d for d in st.session_state.documents
+             if d["doc_id"] == st.session_state.selected_doc), None
         )
-        label = doc_meta["filename"] if doc_meta else st.session_state.selected_doc[:12]
-        st.info(f"🔍 Searching in: **{label}**  _(change scope in sidebar)_")
+        scope_name = doc_meta["filename"] if doc_meta else "Selected document"
+        st.markdown(
+            f'<div style="background:#0d1020;border:1px solid #1a2040;border-radius:8px;'
+            f'padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#7eb3ff;">'
+            f'🔍 Searching in: <b>{scope_name}</b> '
+            f'<span style="color:#3a4060;">· change in sidebar</span></div>',
+            unsafe_allow_html=True
+        )
     else:
-        st.info("🔍 Searching across: **all documents**  _(select a specific doc in sidebar)_")
+        st.markdown(
+            '<div style="background:#0d1020;border:1px solid #1a2040;border-radius:8px;'
+            'padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#5a6480;">'
+            '🌐 Searching across <b style="color:#9aa3c8;">all documents</b></div>',
+            unsafe_allow_html=True
+        )
 
-    # Render history
-    for turn in st.session_state.chat_history:
-        with st.chat_message("user"):
-            st.write(turn["question"])
-        with st.chat_message("assistant"):
-            st.markdown(
-                f'<div class="answer-box">{turn["answer"]}</div>',
-                unsafe_allow_html=True,
-            )
-            render_sources(turn.get("sources", []))
+    if not st.session_state.documents:
+        st.markdown("""
+        <div style="text-align:center;padding:60px 20px;color:#3a4060;">
+            <div style="font-size:2.5rem;">📂</div>
+            <div style="margin-top:12px;font-size:0.9rem;">Upload a document first to start asking questions</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Render history
+        for turn in st.session_state.chat_history:
+            with st.chat_message("user"):
+                st.write(turn["question"])
+            with st.chat_message("assistant"):
+                st.markdown(
+                    f'<div class="answer-wrap">{turn["answer"]}</div>',
+                    unsafe_allow_html=True
+                )
+                if turn.get("sources"):
+                    render_sources(turn["sources"])
+                if turn.get("elapsed"):
+                    st.markdown(
+                        f'<div style="color:#3a4060;font-size:0.72rem;'
+                        f'text-align:right;margin-top:4px;">⏱ {turn["elapsed"]:.1f}s</div>',
+                        unsafe_allow_html=True
+                    )
 
-    # Input
-    question = st.chat_input("Ask a question about your document(s)…")
-    if question:
-        with st.chat_message("user"):
-            st.write(question)
+        # Input
+        question = st.chat_input("Ask a question about your document(s)…")
+        if question:
+            with st.chat_message("user"):
+                st.write(question)
 
-        with st.chat_message("assistant"):
-            with st.spinner("Retrieving context and generating answer…"):
-                result = api_post(
-                    "/ask",
-                    json_data={
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking…"):
+                    t0 = time.time()
+                    result = api_post("/ask", json_data={
                         "question": question,
                         "doc_id": st.session_state.selected_doc,
                         "top_k": 5,
-                    },
-                )
+                    })
+                    elapsed = time.time() - t0
 
-            if result:
-                st.markdown(
-                    f'<div class="answer-box">{result["answer"]}</div>',
-                    unsafe_allow_html=True,
-                )
-                render_sources(result.get("sources", []))
+                if result:
+                    answer = result["answer"]
+                    sources = result.get("sources", [])
 
-                st.session_state.chat_history.append({
-                    "question": question,
-                    "answer": result["answer"],
-                    "sources": result.get("sources", []),
-                })
-            else:
-                st.error("Failed to get an answer. Check that documents are uploaded and models are ready.")
+                    st.markdown(
+                        f'<div class="answer-wrap">{answer}</div>',
+                        unsafe_allow_html=True
+                    )
+                    render_sources(sources)
+                    st.markdown(
+                        f'<div style="color:#3a4060;font-size:0.72rem;'
+                        f'text-align:right;margin-top:4px;">⏱ {elapsed:.1f}s</div>',
+                        unsafe_allow_html=True
+                    )
+
+                    st.session_state.chat_history.append({
+                        "question": question,
+                        "answer": answer,
+                        "sources": sources,
+                        "elapsed": elapsed,
+                    })
+                else:
+                    st.markdown(
+                        '<div class="toast-err">❌ Could not get an answer. '
+                        'Check backend logs.</div>',
+                        unsafe_allow_html=True
+                    )
 
 
-# ──────────────────── SUMMARY TAB ───────────────────────────────────────────
-
+# ── SUMMARY ─────────────────────────────────────────────────────────────────
 with tab_summary:
-    st.markdown("### Generate Document Summary")
+    st.markdown("### Document Summary")
 
     docs = st.session_state.documents
     if not docs:
-        st.warning("No documents uploaded yet. Go to the Upload tab first.")
+        st.markdown("""
+        <div style="text-align:center;padding:60px 20px;color:#3a4060;">
+            <div style="font-size:2.5rem;">📋</div>
+            <div style="margin-top:12px;font-size:0.9rem;">No documents uploaded yet</div>
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        selected_for_summary = st.selectbox(
-            "Select document to summarize:",
-            options=[(d["filename"], d["doc_id"]) for d in docs],
+        options = [(d["filename"], d["doc_id"]) for d in docs]
+        chosen = st.selectbox(
+            "Select document",
+            options,
             format_func=lambda x: x[0],
+            label_visibility="collapsed"
         )
 
-        if st.button("📋 Generate Summary", use_container_width=False):
-            doc_name, doc_id = selected_for_summary
-            with st.spinner(f"Summarizing '{doc_name}'… this may take a minute."):
+        if st.button("📋 Generate Summary", type="primary"):
+            name, doc_id = chosen
+            with st.spinner(f"Summarizing '{name}'…"):
+                t0 = time.time()
                 result = api_get(f"/summary/{doc_id}")
+                elapsed = time.time() - t0
 
             if result:
-                st.markdown(f"#### Summary: {doc_name}")
+                st.markdown(f"""
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-val">{result.get('total_pages') or '—'}</div>
+                        <div class="metric-lbl">Pages</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">{result['chunks_used']}</div>
+                        <div class="metric-lbl">Chunks analysed</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">{elapsed:.1f}s</div>
+                        <div class="metric-lbl">Time taken</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                meta_cols = st.columns(3)
-                meta_cols[0].metric("Pages", result.get("total_pages") or "N/A")
-                meta_cols[1].metric("Chunks analyzed", result["chunks_used"])
-                meta_cols[2].metric("Doc ID", doc_id[:8] + "…")
-
-                st.markdown("---")
                 st.markdown(
-                    f'<div class="card">{result["summary"]}</div>',
-                    unsafe_allow_html=True,
+                    f'<div class="answer-wrap">{result["summary"]}</div>',
+                    unsafe_allow_html=True
                 )
 
-                # Download summary
                 st.download_button(
-                    label="⬇️ Download Summary",
+                    "⬇️ Download Summary",
                     data=result["summary"],
-                    file_name=f"summary_{doc_name}.txt",
+                    file_name=f"summary_{name}.txt",
                     mime="text/plain",
                 )
 
 
-# ── Footer ─────────────────────────────────────────────────────────────────
+# ── Footer ───────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown(
-    '<div style="text-align:center; color:#555; font-size:0.8rem;">'
-    "🔒 Secure Document Intelligence · Fully local · Powered by Phi-3 + nomic-embed-text + Qdrant"
-    "</div>",
-    unsafe_allow_html=True,
+    '<div style="text-align:center;color:#2a3060;font-size:0.75rem;padding:4px 0;">'
+    '🔒 Secure Document Intelligence · Fully local · '
+    'Phi-3 / Gemma · nomic-embed-text · Qdrant</div>',
+    unsafe_allow_html=True
 )
